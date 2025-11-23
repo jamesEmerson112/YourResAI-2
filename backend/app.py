@@ -1,6 +1,6 @@
 """
 Simple Flask backend for restaurant menu creator
-Uses fal.ai alpha-image-232 for generation and editing
+Uses fal.ai beta-image-232 for generation and editing
 """
 
 from flask import Flask, request, jsonify
@@ -70,7 +70,7 @@ def surprise_me():
 
 @app.route('/api/generate', methods=['POST'])
 def generate_menu():
-    """Generate menu image from menu items."""
+    """Generate menu image from menu items using FLUX.2 multi-image editing."""
     data = request.json
     restaurant_name = data.get('restaurantName', 'Restaurant')
     items = data.get('items', [])
@@ -79,6 +79,7 @@ def generate_menu():
     print(f"Processing {len(items)} menu items...")
 
     # Generate images for items that don't have them
+    food_image_urls = []
     for item in items:
         if not item.get('imageUrl'):
             print(f"Generating image for: {item['name']}")
@@ -86,20 +87,41 @@ def generate_menu():
         else:
             print(f"Using provided image for: {item['name']}")
 
-    # Build prompt
-    prompt = build_menu_prompt(restaurant_name, items, style)
+        # Collect image URLs for items that have them
+        if item.get('imageUrl'):
+            food_image_urls.append(item['imageUrl'])
 
-    print(f"Generating menu with prompt: {prompt[:200]}...")
+    # Check if we have any images to work with
+    if not food_image_urls:
+        print("⚠️ No food images available, falling back to text-only generation")
+        prompt = build_menu_prompt(restaurant_name, items, style)
+        print(f"Generating menu with text-only prompt: {prompt[:200]}...")
 
-    # Generate image
-    result = fal_client.subscribe(
-        "fal-ai/alpha-image-232/text-to-image",
-        arguments={"prompt": prompt},
-        with_logs=True,
-        on_queue_update=on_queue_update,
-    )
+        result = fal_client.subscribe(
+            "fal-ai/beta-image-232/text-to-image",
+            arguments={"prompt": prompt},
+            with_logs=True,
+            on_queue_update=on_queue_update,
+        )
+        image_url = result['images'][0]['url']
+    else:
+        # Use FLUX.2 multi-image editing with explicit image references
+        print(f"🎨 Using FLUX.2 multi-image editing with {len(food_image_urls)} food images")
+        prompt = build_menu_prompt_with_images(restaurant_name, items, style)
 
-    image_url = result['images'][0]['url']
+        print(f"Generating menu with multi-image prompt: {prompt[:200]}...")
+        print(f"Food image URLs: {food_image_urls[:3]}..." if len(food_image_urls) > 3 else f"Food image URLs: {food_image_urls}")
+
+        result = fal_client.subscribe(
+            "fal-ai/beta-image-232/edit",
+            arguments={
+                "image_urls": food_image_urls,
+                "prompt": prompt,
+            },
+            with_logs=True,
+            on_queue_update=on_queue_update,
+        )
+        image_url = result['images'][0]['url']
 
     return jsonify({
         'imageUrl': image_url,
@@ -118,7 +140,7 @@ def edit_menu():
     print(f"Editing menu: {edit_instruction}")
 
     result = fal_client.subscribe(
-        "fal-ai/alpha-image-232/edit-image",
+        "fal-ai/beta-image-232/edit",
         arguments={
             "image_urls": [image_url],
             "prompt": edit_instruction,
@@ -152,7 +174,7 @@ def generate_menu_content(user_prompt):
 
 
 def build_menu_prompt(restaurant_name, items, style):
-    """Build detailed prompt for menu generation."""
+    """Build detailed prompt for menu generation (legacy text-only method)."""
 
     # Style mappings
     style_descriptions = {
@@ -192,6 +214,56 @@ def build_menu_prompt(restaurant_name, items, style):
         prompt += "\n"
 
     prompt += f"\n{style_desc}. Include space for food photographs next to items. Sharp, crisp, highly readable text. Clear prices. Professional layout with image placeholders."
+
+    return prompt
+
+
+def build_menu_prompt_with_images(restaurant_name, items, style):
+    """Build FLUX.2 multi-image prompt using explicit image references."""
+
+    # Style mappings
+    style_descriptions = {
+        'modern': 'Modern clean design, minimalist, sharp typography, high contrast',
+        'vintage': 'Vintage rustic style, chalkboard aesthetic, hand-drawn feel, warm colors',
+        'elegant': 'Elegant upscale design, sophisticated fonts, gold accents, luxury feel',
+        'casual': 'Casual friendly design, bright colors, fun fonts, approachable layout',
+    }
+
+    style_desc = style_descriptions.get(style, style_descriptions['modern'])
+
+    # Group items by category
+    categories = {}
+    for item in items:
+        cat = item.get('category', 'Items')
+        if cat not in categories:
+            categories[cat] = []
+        categories[cat].append(item)
+
+    # Build prompt with explicit image references (1-based indexing)
+    prompt = f"Professional restaurant menu layout for '{restaurant_name}'.\n\n"
+
+    image_index = 1
+    for category, cat_items in categories.items():
+        prompt += f"{category.upper()}:\n"
+        for item in cat_items:
+            name = item.get('name', '')
+            price = item.get('price', 0)
+            desc = item.get('description', '')
+            has_image = bool(item.get('imageUrl'))
+
+            if has_image:
+                # Use explicit image reference for FLUX.2
+                prompt += f"- Place image {image_index} ({name}, ${price}) with description: \"{desc}\"\n"
+                image_index += 1
+            else:
+                # Text-only item
+                prompt += f"- {name} ${price}"
+                if desc:
+                    prompt += f" - {desc}"
+                prompt += "\n"
+        prompt += "\n"
+
+    prompt += f"\n{style_desc}. Arrange food photographs elegantly with their names, prices, and descriptions. Sharp, crisp, highly readable text. Professional layout with proper spacing between items."
 
     return prompt
 
