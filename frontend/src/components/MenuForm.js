@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import './MenuForm.css';
 
 const CATEGORIES = ['Appetizers', 'Main Course', 'Pasta', 'Burgers', 'Sides', 'Desserts', 'Drinks'];
@@ -18,6 +18,8 @@ function MenuForm({ restaurantName, setRestaurantName, items, addItem, removeIte
     imageUrl: '',
   });
 
+  const fileInputRef = useRef(null);
+
   const handleAddItem = () => {
     if (!newItem.name || !newItem.price) {
       alert('Please fill in item name and price');
@@ -36,6 +38,43 @@ function MenuForm({ restaurantName, setRestaurantName, items, addItem, removeIte
       description: '',
       imageUrl: '',
     });
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleImageFile = (file) => {
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setNewItem({ ...newItem, imageUrl: event.target.result });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handlePaste = (e) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        handleImageFile(file);
+        break;
+      }
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleImageFile(files[0]);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
   };
 
   return (
@@ -110,17 +149,19 @@ function MenuForm({ restaurantName, setRestaurantName, items, addItem, removeIte
         />
       </div>
 
-      <div className="form-group">
-        <label>Image URL (optional)</label>
+      <div
+        className="form-group"
+        onPaste={handlePaste}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+      >
+        <label>Image (optional)</label>
         <input
-          type="text"
-          value={newItem.imageUrl}
-          onChange={(e) => setNewItem({ ...newItem, imageUrl: e.target.value })}
-          placeholder="https://... or leave blank to auto-generate"
+          type="file"
+          accept="image/*"
+          ref={fileInputRef}
+          onChange={(e) => handleImageFile(e.target.files[0])}
         />
-        <small style={{color: '#666', fontSize: '0.85rem', marginTop: '0.25rem', display: 'block'}}>
-          Paste an image URL or leave blank to auto-generate a realistic food image
-        </small>
       </div>
 
       <button onClick={handleAddItem} className="add-item-btn">
@@ -133,11 +174,11 @@ function MenuForm({ restaurantName, setRestaurantName, items, addItem, removeIte
           {items.map((item, index) => (
             <div key={index} className="menu-item">
               <div className="item-info">
-                <span className="item-category">{item.category}</span>
+                <span className="item-category" style={{marginInlineEnd: '1.5ch'}}>{item.category}</span>
                 <strong>{item.name}</strong> - ${item.price}
+                <br></br>
                 {item.description && <div className="item-desc">{item.description}</div>}
-                {item.imageUrl && <div className="item-image-indicator">📷 Image provided</div>}
-                {!item.imageUrl && <div className="item-image-indicator" style={{color: '#999'}}>🎨 Will auto-generate</div>}
+                {item.imageUrl && <img src={item.imageUrl} alt="Menu item" style={{maxHeight: '100px', maxWidth: '300px', marginTop: '0.5rem'}} />}
               </div>
               <button onClick={() => removeItem(index)} className="remove-btn">
                 ✕
