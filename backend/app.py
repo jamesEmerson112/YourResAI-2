@@ -253,7 +253,7 @@ def build_menu_prompt_with_images(restaurant_name, items, style):
 
             if has_image:
                 # Use explicit image reference for FLUX.2
-                prompt += f"- Place image {image_index} ({name}, ${price}) with description: \"{desc}\"\n"
+                prompt += f"- Place image {image_index} with minimal edits; {name}, ${price} with description: \"{desc}\"\n"
                 image_index += 1
             else:
                 # Text-only item
