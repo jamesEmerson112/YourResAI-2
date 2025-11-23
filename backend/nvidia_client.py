@@ -20,7 +20,7 @@ class NvidiaClient:
             base_url="https://integrate.api.nvidia.com/v1",
             api_key=os.getenv("NVIDIA_API_KEY")
         )
-        self.model = "nvidia/llama-3.3-nemotron-super-49b-v1.5"
+        self.model = "nvidia/llama-3.1-nemotron-ultra-253b-v1"
 
         # Default parameters matching nemotron reference
         self.default_temperature = 0.6
@@ -83,7 +83,13 @@ class NvidiaClient:
                 )
 
                 content = response.choices[0].message.content
-                print(f"NVIDIA API response (first 200 chars): {content[:200]}")
+
+                # Print FULL response for debugging
+                print("\n" + "="*80)
+                print("FULL NVIDIA API RESPONSE:")
+                print("="*80)
+                print(content)
+                print("="*80 + "\n")
 
                 # Extract reasoning from response (if present)
                 reasoning, final_answer = self._extract_reasoning(content)
