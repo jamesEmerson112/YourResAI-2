@@ -8,6 +8,9 @@ from flask_cors import CORS
 import fal_client
 from dotenv import load_dotenv
 from nvidia_client import NvidiaClient
+import threading
+import uuid
+from datetime import datetime
 
 load_dotenv()
 app = Flask(__name__)
@@ -15,6 +18,214 @@ CORS(app)
 
 # Initialize NVIDIA client wrapper
 nvidia_client = NvidiaClient()
+
+# In-memory storage for variant generation sessions
+variant_sessions = {}
+
+
+def generate_menu_variant_visual(restaurant_name, items, style, variant_id):
+    """
+    Generate visual variant using SAME menu data with different style.
+
+    Args:
+        restaurant_name: Restaurant name
+        items: Menu items (with imageUrl already generated)
+        style: Visual style (elegant, modern, vintage, casual)
+        variant_id: Variant number (1, 2, or 3)
+
+    Returns:
+        Complete menu data with image URL
+    """
+    try:
+        print(f"\n🎨 Generating Variant {variant_id} with '{style}' style")
+
+        # Collect food image URLs
+        food_image_urls = [item['imageUrl'] for item in items if item.get('imageUrl')]
+
+        print(f"  Using {len(food_image_urls)} existing food images")
+
+        # Generate menu composition with specified style
+        if food_image_urls:
+            prompt = build_menu_prompt_with_images(restaurant_name, items, style)
+            print(f"  Composing menu with style: {style}")
+            result = fal_client.subscribe(
+                "fal-ai/beta-image-232/edit",
+                arguments={
+                    "image_urls": food_image_urls,
+                    "prompt": prompt,
+                },
+                with_logs=True,
+                on_queue_update=on_queue_update,
+            )
+            menu_image_url = result['images'][0]['url']
+        else:
+            # Fallback to text-only
+            prompt = build_menu_prompt(restaurant_name, items, style)
+            result = fal_client.subscribe(
+                "fal-ai/beta-image-232/text-to-image",
+                arguments={"prompt": prompt},
+                with_logs=True,
+                on_queue_update=on_queue_update,
+            )
+            menu_image_url = result['images'][0]['url']
+
+        print(f"  ✓ Variant {variant_id} complete with '{style}' style!")
+
+        return {
+            'id': variant_id,
+            'restaurantName': restaurant_name,
+            'items': items,
+            'imageUrl': menu_image_url,
+            'prompt': prompt,
+            'style': style,
+            'status': 'ready',
+            'timestamp': datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        print(f"  ✗ Error generating variant {variant_id}: {e}")
+        return {
+            'id': variant_id,
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }
+
+
+def generate_variants_background(session_id, restaurant_name, items, styles):
+    """
+    Background thread function to generate visual variants 2 and 3.
+
+    Args:
+        session_id: Unique session identifier
+        restaurant_name: Restaurant name from menu data
+        items: Menu items with food images already generated
+        styles: List of 3 styles [style1, style2, style3]
+    """
+    print(f"\n🔄 Background generation started for session {session_id}")
+
+    # Generate variant 2 with different style
+    variant2 = generate_menu_variant_visual(restaurant_name, items, styles[1], 2)
+    variant_sessions[session_id]['variants'][2] = variant2
+    print(f"✓ Variant 2 complete and stored")
+
+    # Generate variant 3 with different style
+    variant3 = generate_menu_variant_visual(restaurant_name, items, styles[2], 3)
+    variant_sessions[session_id]['variants'][3] = variant3
+    print(f"✓ Variant 3 complete and stored")
+
+    print(f"✓ Background generation complete for session {session_id}")
+
+
+@app.route('/api/generate-variants', methods=['POST'])
+def generate_variants():
+    """
+    Generate 3 menu variants with progressive loading.
+    Same menu content, but 3 different visual styles.
+    Returns variant 1 immediately, generates 2 & 3 in background.
+    """
+    data = request.json
+    user_prompt = data.get('prompt', 'a burger joint')
+
+    # Create unique session ID
+    session_id = str(uuid.uuid4())
+
+    # Define visual styles for the 3 variants
+    styles = ['elegant', 'modern', 'vintage']
+
+    print(f"\n{'='*60}")
+    print(f"NEW VARIANT GENERATION REQUEST")
+    print(f"Session ID: {session_id}")
+    print(f"User Prompt: {user_prompt}")
+    print(f"{'='*60}")
+
+    try:
+        # Step 1: Generate menu JSON ONCE using NVIDIA
+        print(f"\n📋 Step 1/3: Generating menu data...")
+        menu_data = nvidia_client.generate_menu_json(user_prompt)
+        restaurant_name = menu_data.get('restaurantName', 'Restaurant')
+        items = menu_data.get('items', [])
+        print(f"  ✓ Generated '{restaurant_name}' with {len(items)} items")
+
+        # Step 2: Generate food images ONCE for all variants
+        print(f"\n🖼️  Step 2/3: Generating {len(items)} food images...")
+        for idx, item in enumerate(items):
+            print(f"    Generating image {idx+1}/{len(items)}: {item['name']}")
+            item['imageUrl'] = generate_food_image(item['name'], item.get('description', ''))
+
+        food_image_count = len([i for i in items if i.get('imageUrl')])
+        print(f"  ✓ Generated {food_image_count} food images")
+
+        # Initialize session storage
+        variant_sessions[session_id] = {
+            'user_prompt': user_prompt,
+            'restaurant_name': restaurant_name,
+            'items': items,
+            'created_at': datetime.now().isoformat(),
+            'variants': {
+                1: {'status': 'generating'},
+                2: {'status': 'pending'},
+                3: {'status': 'pending'}
+            }
+        }
+
+        # Step 3a: Generate variant 1 immediately (elegant style)
+        print(f"\n🎨 Step 3/3: Generating variant 1...")
+        variant1 = generate_menu_variant_visual(restaurant_name, items, styles[0], 1)
+        variant_sessions[session_id]['variants'][1] = variant1
+
+        # Step 3b: Start background thread for variants 2 & 3 (modern and vintage styles)
+        thread = threading.Thread(
+            target=generate_variants_background,
+            args=(session_id, restaurant_name, items, styles)
+        )
+        thread.daemon = True
+        thread.start()
+
+        print(f"\n✓ Variant 1 ready, variants 2 & 3 generating in background")
+
+        # Return variant 1 immediately with session ID for polling
+        return jsonify({
+            'sessionId': session_id,
+            'variant1': variant1,
+            'variant2': {'status': 'generating'},
+            'variant3': {'status': 'generating'}
+        })
+
+    except Exception as e:
+        print(f"\n✗ Error in variant generation: {e}")
+        return jsonify({
+            'error': str(e),
+            'sessionId': session_id
+        }), 500
+
+
+@app.route('/api/check-variant-status/<session_id>', methods=['GET'])
+def check_variant_status(session_id):
+    """
+    Check status of background variant generation.
+
+    Args:
+        session_id: Session identifier from /api/generate-variants
+
+    Returns:
+        Current status of all variants
+    """
+    if session_id not in variant_sessions:
+        return jsonify({'error': 'Session not found'}), 404
+
+    session = variant_sessions[session_id]
+
+    return jsonify({
+        'sessionId': session_id,
+        'variant1': session['variants'][1],
+        'variant2': session['variants'][2],
+        'variant3': session['variants'][3],
+        'allReady': all(
+            v.get('status') == 'ready'
+            for v in session['variants'].values()
+        )
+    })
 
 
 def on_queue_update(update):

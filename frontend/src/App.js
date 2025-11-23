@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import MenuForm from './components/MenuForm';
 import MenuPreview from './components/MenuPreview';
@@ -11,6 +11,51 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [surprisePrompt, setSurprisePrompt] = useState('');
 
+  // New state for 3-variant system
+  const [variants, setVariants] = useState({
+    1: null,
+    2: { status: 'idle' },
+    3: { status: 'idle' }
+  });
+  const [activeVariant, setActiveVariant] = useState(1);
+  const [sessionId, setSessionId] = useState(null);
+  const pollingInterval = useRef(null);
+
+  // Polling mechanism to check variant status
+  useEffect(() => {
+    if (sessionId) {
+      // Start polling every 3 seconds
+      pollingInterval.current = setInterval(async () => {
+        try {
+          const response = await fetch(`/api/check-variant-status/${sessionId}`);
+          const data = await response.json();
+
+          setVariants({
+            1: data.variant1,
+            2: data.variant2,
+            3: data.variant3
+          });
+
+          // Stop polling if all variants are ready
+          if (data.allReady) {
+            clearInterval(pollingInterval.current);
+            pollingInterval.current = null;
+            console.log('✓ All variants ready!');
+          }
+        } catch (error) {
+          console.error('Polling error:', error);
+        }
+      }, 3000);
+
+      // Cleanup on unmount
+      return () => {
+        if (pollingInterval.current) {
+          clearInterval(pollingInterval.current);
+        }
+      };
+    }
+  }, [sessionId]);
+
   const handleSurpriseMe = async () => {
     if (!surprisePrompt.trim()) {
       alert('Please enter a description (e.g., "burger joint")');
@@ -18,22 +63,49 @@ function App() {
     }
 
     setLoading(true);
+    setActiveVariant(1);
+    setVariants({
+      1: { status: 'generating' },
+      2: { status: 'generating' },
+      3: { status: 'generating' }
+    });
+
     try {
-      const response = await fetch('/api/surprise', {
+      // Use new variant generation endpoint
+      const response = await fetch('/api/generate-variants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: surprisePrompt }),
       });
 
       const data = await response.json();
-      setRestaurantName(data.restaurantName);
-      setItems(data.items);
+
+      // Store session ID for polling
+      setSessionId(data.sessionId);
+
+      // Update variants state with initial data
+      setVariants({
+        1: data.variant1,
+        2: data.variant2,
+        3: data.variant3
+      });
+
+      // Set restaurant data from variant 1 for manual editing if needed
+      if (data.variant1.status === 'ready') {
+        setRestaurantName(data.variant1.restaurantName);
+        setItems(data.variant1.items);
+      }
+
       setLoading(false);
     } catch (error) {
       console.error('Error:', error);
-      alert('Failed to generate menu');
+      alert('Failed to generate menu variants');
       setLoading(false);
     }
+  };
+
+  const handleVariantSwitch = (variantId) => {
+    setActiveVariant(variantId);
   };
 
   const handleGenerate = async () => {
@@ -149,6 +221,9 @@ function App() {
             generatedImage={generatedImage}
             loading={loading}
             onEdit={handleEdit}
+            variants={variants}
+            activeVariant={activeVariant}
+            onVariantSwitch={handleVariantSwitch}
           />
         </div>
       </div>

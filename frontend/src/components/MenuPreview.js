@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './MenuPreview.css';
 
-function MenuPreview({ generatedImage, loading, onEdit }) {
+function MenuPreview({ generatedImage, loading, onEdit, variants, activeVariant, onVariantSwitch }) {
   const [editInstruction, setEditInstruction] = useState('');
   const [showEditInput, setShowEditInput] = useState(false);
 
@@ -16,7 +16,16 @@ function MenuPreview({ generatedImage, loading, onEdit }) {
     setShowEditInput(false);
   };
 
-  if (loading) {
+  // Check if we're in variant mode
+  const hasVariants = variants && variants[1] && variants[1].status !== 'idle';
+  const currentVariant = hasVariants ? variants[activeVariant] : null;
+
+  // Determine what to display
+  const displayImage = currentVariant?.imageUrl || generatedImage?.imageUrl;
+  const displayItems = currentVariant?.items || generatedImage?.items;
+  const displayName = currentVariant?.restaurantName;
+
+  if (loading && !hasVariants) {
     return (
       <div className="menu-preview">
         <div className="loading">
@@ -27,7 +36,7 @@ function MenuPreview({ generatedImage, loading, onEdit }) {
     );
   }
 
-  if (!generatedImage) {
+  if (!displayImage && !hasVariants) {
     return (
       <div className="menu-preview">
         <div className="placeholder">
@@ -41,41 +50,86 @@ function MenuPreview({ generatedImage, loading, onEdit }) {
 
   return (
     <div className="menu-preview">
-      <h2>Generated Menu</h2>
+      {/* Variant Selector */}
+      {hasVariants && (
+        <div className="variant-selector">
+          {[1, 2, 3].map((variantId) => {
+            const variant = variants[variantId];
+            const isActive = activeVariant === variantId;
+            const isReady = variant?.status === 'ready';
+            const isGenerating = variant?.status === 'generating';
+            const isError = variant?.status === 'error';
 
-      <div className="image-container">
-        <a href={generatedImage.imageUrl} target="_blank" rel="noopener noreferrer">
-          <img src={generatedImage.imageUrl} alt="Generated Menu" />
-          <div className="click-hint">Click to view full size in new tab</div>
-        </a>
-      </div>
-
-      {generatedImage.items && generatedImage.items.some(item => item.imageUrl) && (
-        <div className="food-images-section">
-          <h3>Food Images</h3>
-          <div className="food-images-grid">
-            {generatedImage.items.filter(item => item.imageUrl).map((item, index) => (
-              <div key={index} className="food-image-item">
-                <img src={item.imageUrl} alt={item.name} />
-                <p className="food-image-name">{item.name}</p>
-              </div>
-            ))}
-          </div>
+            return (
+              <button
+                key={variantId}
+                className={`variant-btn ${isActive ? 'active' : ''} ${!isReady ? 'disabled' : ''}`}
+                onClick={() => isReady && onVariantSwitch(variantId)}
+                disabled={!isReady}
+              >
+                <span className="variant-number">Variant {variantId}</span>
+                {isGenerating && <span className="variant-status">⏳ Generating...</span>}
+                {isReady && variant.restaurantName && (
+                  <span className="variant-name">{variant.restaurantName}</span>
+                )}
+                {isError && <span className="variant-status error">❌ Error</span>}
+              </button>
+            );
+          })}
         </div>
       )}
 
-      {showEditInput && (
-        <div className="edit-section">
-          <input
-            type="text"
-            value={editInstruction}
-            onChange={(e) => setEditInstruction(e.target.value)}
-            placeholder="e.g., Make text larger, fix Bruschetta price to $8"
-            className="edit-input"
-          />
-          <button onClick={handleEdit} className="apply-edit-btn">
-            Apply Edit
-          </button>
+      {/* Display current variant or single menu */}
+      {currentVariant?.status === 'generating' ? (
+        <div className="loading">
+          <div className="spinner"></div>
+          <p>Generating variant {activeVariant}...</p>
+        </div>
+      ) : displayImage ? (
+        <>
+          <h2>{displayName || 'Generated Menu'}</h2>
+
+          <div className="image-container">
+            <a href={displayImage} target="_blank" rel="noopener noreferrer">
+              <img src={displayImage} alt="Generated Menu" />
+              <div className="click-hint">Click to view full size in new tab</div>
+            </a>
+          </div>
+
+          {displayItems && displayItems.some(item => item.imageUrl) && (
+            <div className="food-images-section">
+              <h3>Food Images</h3>
+              <div className="food-images-grid">
+                {displayItems.filter(item => item.imageUrl).map((item, index) => (
+                  <div key={index} className="food-image-item">
+                    <img src={item.imageUrl} alt={item.name} />
+                    <p className="food-image-name">{item.name}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {showEditInput && (
+            <div className="edit-section">
+              <input
+                type="text"
+                value={editInstruction}
+                onChange={(e) => setEditInstruction(e.target.value)}
+                placeholder="e.g., Make text larger, fix Bruschetta price to $8"
+                className="edit-input"
+              />
+              <button onClick={handleEdit} className="apply-edit-btn">
+                Apply Edit
+              </button>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="placeholder">
+          <h2>📋 Preview</h2>
+          <p>Your generated menu will appear here</p>
+          <div className="preview-icon">🍽️</div>
         </div>
       )}
     </div>

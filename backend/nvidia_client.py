@@ -147,7 +147,7 @@ Return ONLY valid JSON in this exact format (no markdown, no code blocks, just r
 }}
 
 Guidelines:
-- Create 3-6 menu items total
+- Create 5 menu items total
 - Use appropriate categories (Appetizers, Main Course, Sides, Desserts, Drinks, etc.)
 - Prices should reflect luxury/fine dining establishments ($60-$200 range, no $ symbol, just the number)
 - Descriptions should be brief
