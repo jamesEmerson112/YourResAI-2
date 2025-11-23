@@ -7,11 +7,14 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import fal_client
 from dotenv import load_dotenv
-import json
+from nvidia_client import NvidiaClient
 
 load_dotenv()
 app = Flask(__name__)
 CORS(app)
+
+# Initialize NVIDIA client wrapper
+nvidia_client = NvidiaClient()
 
 
 def on_queue_update(update):
@@ -132,74 +135,12 @@ def edit_menu():
 
 
 def generate_menu_content(user_prompt):
-    """Generate menu content from user prompt using AI."""
-
-    prompt = f"""You are a restaurant menu creator AI. Given a description of a restaurant type or concept,
-generate a complete restaurant menu with a creative name, menu items organized by category, with prices and descriptions.
-
-User request: {user_prompt}
-
-Return ONLY valid JSON in this exact format (no markdown, no code blocks, just raw JSON):
-{{
-    "restaurantName": "Creative Restaurant Name",
-    "items": [
-        {{"category": "Category Name", "name": "Item Name", "price": 12, "description": "Brief description"}},
-        ...
-    ]
-}}
-
-Guidelines:
-- Create 3-6 menu items total
-- Use appropriate categories (Appetizers, Main Course, Sides, Desserts, Drinks, etc.)
-- Prices should be realistic numbers (no $ symbol, just the number)
-- Descriptions should be brief (under 15 words)
-- Make the restaurant name creative and fitting to the concept"""
-
+    """Generate menu content from user prompt using NVIDIA client."""
     try:
-        # Collect all streamed content
-        full_content = ""
-        stream = fal_client.stream(
-            "openrouter/router",
-            arguments={
-                "prompt": prompt,
-                "model": "google/gemini-2.5-flash",
-                "temperature": 1
-            }
-        )
-
-        final_output = None
-        for event in stream:
-            # The final event has partial: False and contains the complete response
-            if isinstance(event, dict) and event.get('partial') == False:
-                final_output = event.get('output', '')
-                break
-
-        if not final_output:
-            raise ValueError("No final output received from stream")
-
-        print(f"Full AI response (first 200 chars): {final_output[:200]}")
-
-        # Strip markdown code blocks if present
-        json_str = final_output.strip()
-        if json_str.startswith('```json'):
-            json_str = json_str[7:]  # Remove ```json
-        if json_str.startswith('```'):
-            json_str = json_str[3:]  # Remove ```
-        if json_str.endswith('```'):
-            json_str = json_str[:-3]  # Remove trailing ```
-        json_str = json_str.strip()
-
-        print(f"Cleaned JSON (first 200 chars): {json_str[:200]}")
-
-        # Parse the JSON response
-        menu_data = json.loads(json_str)
-
-        return menu_data
-
+        return nvidia_client.generate_menu_json(user_prompt)
     except Exception as e:
-        print(f"Error generating menu with AI: {e}")
-        print(f"Final output received: {final_output if 'final_output' in locals() else 'None'}")
-        # Fallback to a simple default
+        print(f"✗ Error in menu generation: {e}")
+        # Client wrapper already handles fallback, but safety catch
         return {
             'restaurantName': 'The Restaurant',
             'items': [
