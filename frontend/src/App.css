@@ -1,0 +1,132 @@
+.App {
+  min-height: 100vh;
+}
+
+.App-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 2rem;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.App-header h1 {
+  font-size: 2rem;
+  margin: 0;
+}
+
+.container {
+  display: grid;
+  grid-template-columns: 450px 1fr;
+  gap: 2rem;
+  max-width: 1600px;
+  margin: 2rem auto;
+  padding: 0 2rem;
+}
+
+.left-panel,
+.right-panel {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.surprise-section {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  border-radius: 8px;
+  color: white;
+}
+
+.surprise-section h2 {
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+}
+
+.surprise-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+}
+
+.surprise-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background: white;
+  color: #f5576c;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.surprise-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+
+.surprise-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.divider {
+  text-align: center;
+  margin: 2rem 0;
+  color: #999;
+  font-weight: bold;
+  position: relative;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 40%;
+  height: 1px;
+  background: #ddd;
+}
+
+.divider::before {
+  left: 0;
+}
+
+.divider::after {
+  right: 0;
+}
+
+.generate-btn {
+  width: 100%;
+  padding: 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: 2rem;
+  transition: transform 0.2s;
+}
+
+.generate-btn:hover:not(:disabled) {
+  transform: scale(1.02);
+}
+
+.generate-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1024px) {
+  .container {
+    grid-template-columns: 1fr;
+  }
+}
