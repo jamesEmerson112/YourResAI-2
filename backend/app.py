@@ -248,22 +248,18 @@ def build_menu_prompt_with_images(restaurant_name, items, style):
         for item in cat_items:
             name = item.get('name', '')
             price = item.get('price', 0)
-            desc = item.get('description', '')
             has_image = bool(item.get('imageUrl'))
 
             if has_image:
-                # Use explicit image reference for FLUX.2
-                prompt += f"- Place image {image_index} ({name}, ${price}) with description: \"{desc}\"\n"
+                # Use explicit image reference for FLUX.2 (name and price only)
+                prompt += f"- Place image {image_index} ({name}, ${price})\n"
                 image_index += 1
             else:
                 # Text-only item
-                prompt += f"- {name} ${price}"
-                if desc:
-                    prompt += f" - {desc}"
-                prompt += "\n"
+                prompt += f"- {name} ${price}\n"
         prompt += "\n"
 
-    prompt += f"\n{style_desc}. Arrange food photographs elegantly with their names, prices, and descriptions. Sharp, crisp, highly readable text. Professional layout with proper spacing between items."
+    prompt += f"\n{style_desc}. Arrange food photographs elegantly with their names and prices. Sharp, crisp, highly readable text. Professional layout with proper spacing between items."
 
     return prompt
 

@@ -149,8 +149,8 @@ Return ONLY valid JSON in this exact format (no markdown, no code blocks, just r
 Guidelines:
 - Create 3-6 menu items total
 - Use appropriate categories (Appetizers, Main Course, Sides, Desserts, Drinks, etc.)
-- Prices should be realistic numbers (no $ symbol, just the number)
-- Descriptions should be brief (under 15 words)
+- Prices should reflect luxury/fine dining establishments ($60-$200 range, no $ symbol, just the number)
+- Descriptions should be brief
 - Make the restaurant name creative and fitting to the concept"""
 
     def _validate_response(self, content: str) -> bool:
@@ -247,25 +247,25 @@ Guidelines:
             Default menu dictionary
         """
         return {
-            'restaurantName': 'The Restaurant',
+            'restaurantName': 'The Fine Dining Experience',
             'items': [
                 {
                     'category': 'Appetizers',
-                    'name': 'Soup of the Day',
-                    'price': 6,
-                    'description': 'Fresh daily soup'
+                    'name': 'Artisan Soup of the Day',
+                    'price': 75,
+                    'description': 'Chef\'s signature seasonal soup'
                 },
                 {
                     'category': 'Main Course',
-                    'name': 'Grilled Chicken',
-                    'price': 16,
-                    'description': 'Herb-marinated chicken breast'
+                    'name': 'Heritage Grilled Chicken',
+                    'price': 120,
+                    'description': 'Free-range chicken with truffle jus'
                 },
                 {
                     'category': 'Desserts',
-                    'name': 'Cheesecake',
-                    'price': 7,
-                    'description': 'Classic New York style'
+                    'name': 'Decadent Cheesecake',
+                    'price': 65,
+                    'description': 'Premium New York style with gold leaf'
                 }
             ]
         }
