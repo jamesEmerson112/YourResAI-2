@@ -1,28 +1,44 @@
-import React, { useState, useRef } from 'react';
-import './MenuForm.css';
+import React, { useState, useRef } from "react";
+import "./MenuForm.css";
 
-const CATEGORIES = ['Appetizers', 'Main Course', 'Pasta', 'Burgers', 'Sides', 'Desserts', 'Drinks'];
+const CATEGORIES = [
+  "Appetizers",
+  "Main Course",
+  "Pasta",
+  "Burgers",
+  "Sides",
+  "Desserts",
+  "Drinks",
+];
 const STYLES = [
-  { value: 'modern', label: 'Modern' },
-  { value: 'vintage', label: 'Vintage' },
-  { value: 'elegant', label: 'Elegant' },
-  { value: 'casual', label: 'Casual' },
+  { value: "modern", label: "Modern" },
+  { value: "vintage", label: "Vintage" },
+  { value: "elegant", label: "Elegant" },
+  { value: "casual", label: "Casual" },
 ];
 
-function MenuForm({ restaurantName, setRestaurantName, items, addItem, removeItem, style, setStyle }) {
+function MenuForm({
+  restaurantName,
+  setRestaurantName,
+  items,
+  addItem,
+  removeItem,
+  style,
+  setStyle,
+}) {
   const [newItem, setNewItem] = useState({
-    category: 'Appetizers',
-    name: '',
-    price: '',
-    description: '',
-    imageUrl: '',
+    category: "Appetizers",
+    name: "",
+    price: "",
+    description: "",
+    imageUrl: "",
   });
 
   const fileInputRef = useRef(null);
 
   const handleAddItem = () => {
     if (!newItem.name || !newItem.price) {
-      alert('Please fill in item name and price');
+      alert("Please fill in item name and price");
       return;
     }
 
@@ -32,20 +48,26 @@ function MenuForm({ restaurantName, setRestaurantName, items, addItem, removeIte
     });
 
     setNewItem({
-      category: 'Appetizers',
-      name: '',
-      price: '',
-      description: '',
-      imageUrl: '',
+      category: "Appetizers",
+      name: "",
+      price: "",
+      description: "",
+      imageUrl: "",
     });
 
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = "";
     }
   };
 
+  const handleEdit = (index) => {
+    const itemToEdit = items[index];
+    setNewItem(itemToEdit);
+    removeItem(index);
+  };
+
   const handleImageFile = (file) => {
-    if (file && file.type.startsWith('image/')) {
+    if (file && file.type.startsWith("image/")) {
       const reader = new FileReader();
       reader.onload = (event) => {
         setNewItem({ ...newItem, imageUrl: event.target.result });
@@ -57,7 +79,7 @@ function MenuForm({ restaurantName, setRestaurantName, items, addItem, removeIte
   const handlePaste = (e) => {
     const items = e.clipboardData.items;
     for (let i = 0; i < items.length; i++) {
-      if (items[i].type.indexOf('image') !== -1) {
+      if (items[i].type.indexOf("image") !== -1) {
         const file = items[i].getAsFile();
         handleImageFile(file);
         break;
@@ -144,7 +166,9 @@ function MenuForm({ restaurantName, setRestaurantName, items, addItem, removeIte
         <input
           type="text"
           value={newItem.description}
-          onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+          onChange={(e) =>
+            setNewItem({ ...newItem, description: e.target.value })
+          }
           placeholder="Fresh mozzarella, tomatoes, basil"
         />
       </div>
@@ -162,6 +186,9 @@ function MenuForm({ restaurantName, setRestaurantName, items, addItem, removeIte
           ref={fileInputRef}
           onChange={(e) => handleImageFile(e.target.files[0])}
         />
+        <p style={{ fontSize: "0.9rem", color: "#555" }}>
+          Upload an image, or leave blank to use a realistic AI-generated image.
+        </p>
       </div>
 
       <button onClick={handleAddItem} className="add-item-btn">
@@ -174,12 +201,35 @@ function MenuForm({ restaurantName, setRestaurantName, items, addItem, removeIte
           {items.map((item, index) => (
             <div key={index} className="menu-item">
               <div className="item-info">
-                <span className="item-category" style={{marginInlineEnd: '1.5ch'}}>{item.category}</span>
+                <span
+                  className="item-category"
+                  style={{ marginInlineEnd: "1.5ch" }}
+                >
+                  {item.category}
+                </span>
                 <strong>{item.name}</strong> - ${item.price}
                 <br></br>
-                {item.description && <div className="item-desc">{item.description}</div>}
-                {item.imageUrl && <img src={item.imageUrl} alt="Menu item" style={{maxHeight: '100px', maxWidth: '300px', marginTop: '0.5rem'}} />}
+                {item.description && (
+                  <div className="item-desc">{item.description}</div>
+                )}
+                {item.imageUrl && (
+                  <img
+                    src={item.imageUrl}
+                    alt="Menu item"
+                    style={{
+                      maxHeight: "100px",
+                      maxWidth: "300px",
+                      marginTop: "0.5rem",
+                    }}
+                  />
+                )}
+                {!item.imageUrl && (
+                  "(Will use an AI-generated image)"
+                )}
               </div>
+              <button onClick={() => handleEdit(index)} className="edit-btn">
+                ✏️
+              </button>
               <button onClick={() => removeItem(index)} className="remove-btn">
                 ✕
               </button>

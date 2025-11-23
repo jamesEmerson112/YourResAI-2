@@ -64,23 +64,6 @@ function MenuPreview({ generatedImage, loading, onEdit }) {
         </div>
       )}
 
-      <div className="actions">
-        <a
-          href={generatedImage.imageUrl}
-          download="menu.png"
-          className="action-btn download-btn"
-        >
-          📥 Download
-        </a>
-
-        <button
-          onClick={() => setShowEditInput(!showEditInput)}
-          className="action-btn edit-btn"
-        >
-          ✏️ Edit Menu
-        </button>
-      </div>
-
       {showEditInput && (
         <div className="edit-section">
           <input
