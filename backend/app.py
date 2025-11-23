@@ -1,17 +1,20 @@
 """
 Simple Flask backend for restaurant menu creator
-Uses fal.ai alpha-image-232 for generation and editing
+Uses fal.ai beta-image-232 for generation and editing
 """
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import fal_client
 from dotenv import load_dotenv
-import json
+from nvidia_client import NvidiaClient
 
 load_dotenv()
 app = Flask(__name__)
 CORS(app)
+
+# Initialize NVIDIA client wrapper
+nvidia_client = NvidiaClient()
 
 
 def on_queue_update(update):
@@ -67,7 +70,7 @@ def surprise_me():
 
 @app.route('/api/generate', methods=['POST'])
 def generate_menu():
-    """Generate menu image from menu items."""
+    """Generate menu image from menu items using FLUX.2 multi-image editing."""
     data = request.json
     restaurant_name = data.get('restaurantName', 'Restaurant')
     items = data.get('items', [])
@@ -76,6 +79,7 @@ def generate_menu():
     print(f"Processing {len(items)} menu items...")
 
     # Generate images for items that don't have them
+    food_image_urls = []
     for item in items:
         if not item.get('imageUrl'):
             print(f"Generating image for: {item['name']}")
@@ -83,20 +87,41 @@ def generate_menu():
         else:
             print(f"Using provided image for: {item['name']}")
 
-    # Build prompt
-    prompt = build_menu_prompt(restaurant_name, items, style)
+        # Collect image URLs for items that have them
+        if item.get('imageUrl'):
+            food_image_urls.append(item['imageUrl'])
 
-    print(f"Generating menu with prompt: {prompt[:200]}...")
+    # Check if we have any images to work with
+    if not food_image_urls:
+        print("⚠️ No food images available, falling back to text-only generation")
+        prompt = build_menu_prompt(restaurant_name, items, style)
+        print(f"Generating menu with text-only prompt: {prompt[:200]}...")
 
-    # Generate image
-    result = fal_client.subscribe(
-        "fal-ai/alpha-image-232/text-to-image",
-        arguments={"prompt": prompt},
-        with_logs=True,
-        on_queue_update=on_queue_update,
-    )
+        result = fal_client.subscribe(
+            "fal-ai/beta-image-232/text-to-image",
+            arguments={"prompt": prompt},
+            with_logs=True,
+            on_queue_update=on_queue_update,
+        )
+        image_url = result['images'][0]['url']
+    else:
+        # Use FLUX.2 multi-image editing with explicit image references
+        print(f"🎨 Using FLUX.2 multi-image editing with {len(food_image_urls)} food images")
+        prompt = build_menu_prompt_with_images(restaurant_name, items, style)
 
-    image_url = result['images'][0]['url']
+        print(f"Generating menu with multi-image prompt: {prompt[:200]}...")
+        print(f"Food image URLs: {food_image_urls[:3]}..." if len(food_image_urls) > 3 else f"Food image URLs: {food_image_urls}")
+
+        result = fal_client.subscribe(
+            "fal-ai/beta-image-232/edit",
+            arguments={
+                "image_urls": food_image_urls,
+                "prompt": prompt,
+            },
+            with_logs=True,
+            on_queue_update=on_queue_update,
+        )
+        image_url = result['images'][0]['url']
 
     return jsonify({
         'imageUrl': image_url,
@@ -115,7 +140,7 @@ def edit_menu():
     print(f"Editing menu: {edit_instruction}")
 
     result = fal_client.subscribe(
-        "fal-ai/alpha-image-232/edit-image",
+        "fal-ai/beta-image-232/edit",
         arguments={
             "image_urls": [image_url],
             "prompt": edit_instruction,
@@ -132,74 +157,12 @@ def edit_menu():
 
 
 def generate_menu_content(user_prompt):
-    """Generate menu content from user prompt using AI."""
-
-    prompt = f"""You are a restaurant menu creator AI. Given a description of a restaurant type or concept,
-generate a complete restaurant menu with a creative name, menu items organized by category, with prices and descriptions.
-
-User request: {user_prompt}
-
-Return ONLY valid JSON in this exact format (no markdown, no code blocks, just raw JSON):
-{{
-    "restaurantName": "Creative Restaurant Name",
-    "items": [
-        {{"category": "Category Name", "name": "Item Name", "price": 12, "description": "Brief description"}},
-        ...
-    ]
-}}
-
-Guidelines:
-- Create 3-6 menu items total
-- Use appropriate categories (Appetizers, Main Course, Sides, Desserts, Drinks, etc.)
-- Prices should be realistic numbers (no $ symbol, just the number)
-- Descriptions should be brief (under 15 words)
-- Make the restaurant name creative and fitting to the concept"""
-
+    """Generate menu content from user prompt using NVIDIA client."""
     try:
-        # Collect all streamed content
-        full_content = ""
-        stream = fal_client.stream(
-            "openrouter/router",
-            arguments={
-                "prompt": prompt,
-                "model": "google/gemini-2.5-flash",
-                "temperature": 1
-            }
-        )
-
-        final_output = None
-        for event in stream:
-            # The final event has partial: False and contains the complete response
-            if isinstance(event, dict) and event.get('partial') == False:
-                final_output = event.get('output', '')
-                break
-
-        if not final_output:
-            raise ValueError("No final output received from stream")
-
-        print(f"Full AI response (first 200 chars): {final_output[:200]}")
-
-        # Strip markdown code blocks if present
-        json_str = final_output.strip()
-        if json_str.startswith('```json'):
-            json_str = json_str[7:]  # Remove ```json
-        if json_str.startswith('```'):
-            json_str = json_str[3:]  # Remove ```
-        if json_str.endswith('```'):
-            json_str = json_str[:-3]  # Remove trailing ```
-        json_str = json_str.strip()
-
-        print(f"Cleaned JSON (first 200 chars): {json_str[:200]}")
-
-        # Parse the JSON response
-        menu_data = json.loads(json_str)
-
-        return menu_data
-
+        return nvidia_client.generate_menu_json(user_prompt)
     except Exception as e:
-        print(f"Error generating menu with AI: {e}")
-        print(f"Final output received: {final_output if 'final_output' in locals() else 'None'}")
-        # Fallback to a simple default
+        print(f"✗ Error in menu generation: {e}")
+        # Client wrapper already handles fallback, but safety catch
         return {
             'restaurantName': 'The Restaurant',
             'items': [
@@ -211,7 +174,7 @@ Guidelines:
 
 
 def build_menu_prompt(restaurant_name, items, style):
-    """Build detailed prompt for menu generation."""
+    """Build detailed prompt for menu generation (legacy text-only method)."""
 
     # Style mappings
     style_descriptions = {
@@ -251,6 +214,56 @@ def build_menu_prompt(restaurant_name, items, style):
         prompt += "\n"
 
     prompt += f"\n{style_desc}. Include space for food photographs next to items. Sharp, crisp, highly readable text. Clear prices. Professional layout with image placeholders."
+
+    return prompt
+
+
+def build_menu_prompt_with_images(restaurant_name, items, style):
+    """Build FLUX.2 multi-image prompt using explicit image references."""
+
+    # Style mappings
+    style_descriptions = {
+        'modern': 'Modern clean design, minimalist, sharp typography, high contrast',
+        'vintage': 'Vintage rustic style, chalkboard aesthetic, hand-drawn feel, warm colors',
+        'elegant': 'Elegant upscale design, sophisticated fonts, gold accents, luxury feel',
+        'casual': 'Casual friendly design, bright colors, fun fonts, approachable layout',
+    }
+
+    style_desc = style_descriptions.get(style, style_descriptions['modern'])
+
+    # Group items by category
+    categories = {}
+    for item in items:
+        cat = item.get('category', 'Items')
+        if cat not in categories:
+            categories[cat] = []
+        categories[cat].append(item)
+
+    # Build prompt with explicit image references (1-based indexing)
+    prompt = f"Professional restaurant menu layout for '{restaurant_name}'.\n\n"
+
+    image_index = 1
+    for category, cat_items in categories.items():
+        prompt += f"{category.upper()}:\n"
+        for item in cat_items:
+            name = item.get('name', '')
+            price = item.get('price', 0)
+            desc = item.get('description', '')
+            has_image = bool(item.get('imageUrl'))
+
+            if has_image:
+                # Use explicit image reference for FLUX.2
+                prompt += f"- Place image {image_index} ({name}, ${price}) with description: \"{desc}\"\n"
+                image_index += 1
+            else:
+                # Text-only item
+                prompt += f"- {name} ${price}"
+                if desc:
+                    prompt += f" - {desc}"
+                prompt += "\n"
+        prompt += "\n"
+
+    prompt += f"\n{style_desc}. Arrange food photographs elegantly with their names, prices, and descriptions. Sharp, crisp, highly readable text. Professional layout with proper spacing between items."
 
     return prompt
 

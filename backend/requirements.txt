@@ -2,3 +2,4 @@ flask
 flask-cors
 fal-client
 python-dotenv
+openai==1.57.4
